@@ -1,0 +1,59 @@
+#!/bin/bash
+
+echo -e "$(date +'%Y/%m/%d %H:%M:%S')\t" $0 $*
+PACKAGE_BASE=${TRIM_APPDEST}
+PACKAGE_SHARE="/var/apps/prometheus.prometheus/shares/prometheus/prometheus/"
+EXEC_BIN="${PACKAGE_BASE}/app/prometheus"
+EXEC_ARGS=" --config.file ${PACKAGE_SHARE}/prometheus.yml --storage.tsdb.path ${PACKAGE_SHARE}/data"
+LOG_FILE="${PACKAGE_SHARE}/prometheus.log"
+
+EXEC_CMDLINE="${EXEC_BIN} ${EXEC_ARGS}"
+
+case $1 in
+start)
+    [ -f ${PACKAGE_SHARE}/prometheus.yml ] || cp ${PACKAGE_BASE}/app/prometheus.yml.template ${PACKAGE_SHARE}/prometheus.yml
+    processNum=`ps -fe | grep app/prometheus | grep -v grep | grep -v tail | wc -l`
+    if [[ ! $processNum -eq 0 ]];then
+            echo "is already running"
+            exit 0
+    else
+            CPU_COUNT=$(nproc)
+            CPU1=$((CPU_COUNT - 1))
+            CPU2=$((CPU_COUNT - 2))
+			CPU3=$((CPU_COUNT - 3))
+			CPU4=$((CPU_COUNT - 4))
+            if [ "$CPU2" -lt 0 ]; then
+                CPU2=0
+            fi
+			if [ "$CPU3" -lt 0 ]; then
+                CPU3=0
+            fi
+			if [ "$CPU4" -lt 0 ]; then
+                CPU4=0
+            fi
+            echo "taskset -c ${CPU1},${CPU2},${CPU3},${CPU4} ${EXEC_CMDLINE}"
+            nohup taskset -c ${CPU1},${CPU2},${CPU3},${CPU4} ${EXEC_CMDLINE} >> ${LOG_FILE} 2>&1 &
+            RETVAL=$?
+            if [ $RETVAL -eq 0 ];then
+                exit 0
+            else
+                exit 1
+            fi
+    fi
+    ;;
+stop)
+	pkill -9 prometheus
+    ;;
+status)
+    processNum=`ps -fe | grep app/prometheus | grep -v grep | grep -v tail | wc -l`
+    if [[ ! $processNum -eq 0 ]];then
+            echo "is already running"
+            exit 0
+    else
+        exit 3
+    fi
+    ;;
+*)
+    exit 1
+    ;;
+esac

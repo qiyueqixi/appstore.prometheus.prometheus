@@ -1,0 +1,7 @@
+{
+  "defaults": {
+    "run-as": "prometheus"
+  },
+  "username": "prometheus",
+  "groupname": "prometheus"
+}

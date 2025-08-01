@@ -1,0 +1,20 @@
+{
+    ".url": {
+        "prometheus.prometheus": {
+            "title": "prometheus",
+            "desc": "prometheus desc",
+            "icon": "images/ICON.PNG",
+            "type": "url",
+            "protocol": "http",
+            "port": "9090",
+            "allUsers": true,
+			"control": {
+                "showRoute": 1,
+                "auth": 1, 
+                "port": 1,
+                "path": 1,
+                "fullUrl": 1
+            }
+        }
+    }
+}
