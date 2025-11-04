@@ -42,7 +42,7 @@ start)
     fi
     ;;
 stop)
-	pkill -9 prometheus
+	pkill -9 prometheus || echo "pkill fail $?"
     ;;
 status)
     processNum=`ps -fe | grep app/prometheus | grep -v grep | grep -v tail | wc -l`
