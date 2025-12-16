@@ -1,0 +1,95 @@
+name: Test Release
+run-name: ${{ github.actor }} build ${{ github.ref_name }} sha ${{ github.sha }}
+
+permissions:
+  contents: write
+  actions: write
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+on:
+  workflow_dispatch:
+    inputs:
+      make_release:
+        description: 'Do you want to create a release?'
+        required: true
+        type: boolean
+        default: false
+env:
+  target_version: "3.8.0"
+  this_pack_version: "3.8.0-1"
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      target_version: ${{ env.target_version }}
+      this_pack_version: ${{ env.this_pack_version }}
+    steps:
+      - run: echo "All set!"
+  pack-amd64:
+    uses: ./.github/workflows/package_amd64.yml
+    secrets: inherit
+    needs:
+      - setup
+    with:
+      target_version: ${{ needs.setup.outputs.target_version }}
+      this_pack_version: ${{ needs.setup.outputs.this_pack_version }}
+  upload-package:
+    runs-on: ubuntu-latest
+    needs:
+      - pack-amd64
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts-${{ github.run_id }}
+      - name: Prepare Artifacts for Upload
+        run: |
+          # Create a new directory for release assets
+          mkdir -p release-assets
+          
+          # Find and copy all artifacts to a flat directory structure
+          find ./release-artifacts-${{ github.run_id }} -type f -exec cp -v {} ./release-assets \;
+          
+          # Generate checksums
+          cd release-assets
+          sha256sum * > SHA256SUMS.txt
+          cd ..
+          
+          echo "Artifacts prepared for upload:"
+          ls -lh ./release-assets
+
+      - name: Create GitHub Release
+        if: ${{ inputs.make_release }}
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.this_pack_version }}
+          prerelease: true
+          release_name: "fnnas.appstore.prometheus.prometheus.${{ env.this_pack_version }}"
+
+      - name: Upload Release Assets
+        if: ${{ inputs.make_release }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Uploading release assets..."
+          
+          # Upload all files in the release-assets directory
+          for file in ./release-assets/*; do
+            echo "Uploading $file"
+            gh release upload "${{ env.this_pack_version }}" "$file" || echo "Failed to upload $file"
+          done
+          
+          echo "Upload completed!"
+
+      - name: Verify Uploaded Assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if: ${{ inputs.make_release }}
+        run: |
+          echo "Uploaded assets:"
+          gh release view "${{ env.this_pack_version }}" --json assets -q '.assets[].name'

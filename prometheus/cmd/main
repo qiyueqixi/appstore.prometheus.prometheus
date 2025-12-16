@@ -4,7 +4,7 @@ echo -e "$(date +'%Y/%m/%d %H:%M:%S')\t" $0 $*
 PACKAGE_BASE=${TRIM_APPDEST}
 PACKAGE_SHARE="/var/apps/prometheus.prometheus/shares/prometheus/prometheus/"
 EXEC_BIN="${PACKAGE_BASE}/app/prometheus"
-EXEC_ARGS=" --config.file ${PACKAGE_SHARE}/prometheus.yml --storage.tsdb.path ${PACKAGE_SHARE}/data"
+EXEC_ARGS=" --config.file ${PACKAGE_SHARE}/prometheus.yml --storage.tsdb.retention.time=180d --storage.tsdb.path ${PACKAGE_SHARE}/data"
 LOG_FILE="${PACKAGE_SHARE}/prometheus.log"
 
 EXEC_CMDLINE="${EXEC_BIN} ${EXEC_ARGS}"
