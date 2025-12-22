@@ -4,6 +4,7 @@ desc="prometheus的prometheus组件，提供tsdb<br>监听端口9090<br>持久�
 display_name="prometheus.prometheus"
 maintainer="prometheus"
 arch="this_pack_arch"
+platform="this_pack_platform"
 maintainer_url="https://github.com/prometheus/prometheus"
 distributor="GreenDamTan"
 distributor_url="https://github.com/fnnas/appstore.prometheus.prometheus"

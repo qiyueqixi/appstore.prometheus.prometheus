@@ -21,9 +21,9 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       target_version: ${{ inputs.target_version }}
-      target_pack_arch: "amd64"
+      target_pack_arch: "arm64"
       this_pack_version: ${{ inputs.this_pack_version }}
-      this_pack_arch: "x86_64"
+      this_pack_arch: "arm"
     steps:
      - name: Check out repository code
        uses: actions/checkout@v4
@@ -45,8 +45,8 @@ jobs:
          sed "s/target_version/${{ env.target_version }}/g" -i ./prometheus/manifest
          sed "s/target_pack_arch/${{ env.target_pack_arch }}/g" -i ./prometheus/manifest
          sed "s/this_pack_version/${{ env.this_pack_version }}/g" -i ./prometheus/manifest
-         sed "s/this_pack_arch/x86_64/g" -i ./prometheus/manifest
-         sed "s/this_pack_platform/x86/g" -i ./prometheus/manifest
+         sed "s/this_pack_arch/${{ env.this_pack_arch }}/g" -i ./prometheus/manifest
+         sed "s/this_pack_platform/${{ env.this_pack_arch }}/g" -i ./prometheus/manifest
      - name: 打包app.tgz
        run: |
          tar zcvf app.tgz app ui
