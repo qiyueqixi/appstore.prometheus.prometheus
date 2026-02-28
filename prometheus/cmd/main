@@ -4,51 +4,72 @@ echo -e "$(date +'%Y/%m/%d %H:%M:%S')\t" $0 $*
 PACKAGE_BASE=${TRIM_APPDEST}
 PACKAGE_SHARE="/var/apps/prometheus.prometheus/shares/prometheus/prometheus/"
 EXEC_BIN="${PACKAGE_BASE}/app/prometheus"
-EXEC_ARGS=" --config.file ${PACKAGE_SHARE}/prometheus.yml --storage.tsdb.retention.time=180d --storage.tsdb.path ${PACKAGE_SHARE}/data"
+EXEC_ARGS=" --config.file ${PACKAGE_SHARE}/prometheus.yml --web.config.file ${TRIM_PKGETC}/prometheus-web.yml --storage.tsdb.retention.time=180d --storage.tsdb.path ${PACKAGE_SHARE}/data"
 LOG_FILE="${PACKAGE_SHARE}/prometheus.log"
 
 EXEC_CMDLINE="${EXEC_BIN} ${EXEC_ARGS}"
 
 case $1 in
 start)
-    [ -f ${PACKAGE_SHARE}/prometheus.yml ] || cp ${PACKAGE_BASE}/app/prometheus.yml.template ${PACKAGE_SHARE}/prometheus.yml
-    processNum=`ps -fe | grep app/prometheus | grep -v grep | grep -v tail | wc -l`
-    if [[ ! $processNum -eq 0 ]];then
-            echo "is already running"
-            exit 0
-    else
-            CPU_COUNT=$(nproc)
-            CPU1=$((CPU_COUNT - 1))
-            CPU2=$((CPU_COUNT - 2))
-			CPU3=$((CPU_COUNT - 3))
-			CPU4=$((CPU_COUNT - 4))
-            if [ "$CPU2" -lt 0 ]; then
-                CPU2=0
-            fi
-			if [ "$CPU3" -lt 0 ]; then
-                CPU3=0
-            fi
-			if [ "$CPU4" -lt 0 ]; then
-                CPU4=0
-            fi
-            echo "taskset -c ${CPU1},${CPU2},${CPU3},${CPU4} ${EXEC_CMDLINE}"
-            nohup taskset -c ${CPU1},${CPU2},${CPU3},${CPU4} ${EXEC_CMDLINE} >> ${LOG_FILE} 2>&1 &
-            RETVAL=$?
-            if [ $RETVAL -eq 0 ];then
-                exit 0
+    if [ ! -f "${PACKAGE_SHARE}/prometheus.yml" ]; then
+        cp "${PACKAGE_BASE}/app/prometheus.yml.template" "${PACKAGE_SHARE}/prometheus.yml"
+    fi
+    echo "is wizard_enable_basic_auth_users ${wizard_enable_basic_auth_users}"
+    if [ "${wizard_enable_basic_auth_users}" = "true" ]; then
+        cp -f "${PACKAGE_BASE}/app/prometheus-web.yml.template" "${TRIM_PKGETC}/prometheus-web.yml"
+        if [ -n "${wizard_username}" ]; then
+            #'crypt' is deprecated and slated for removal in Python 3.13
+            python_major=$(python3 --version 2>&1 | awk '{print $2}' | cut -d. -f1)
+            python_minor=$(python3 --version 2>&1 | awk '{print $2}' | cut -d. -f2)
+            if [ "$python_major" -eq 3 ] && [ "$python_minor" -lt 13 ]; then
+                wizard_password_hashpw=$(python3 -c "import crypt,sys; print(crypt.crypt(sys.argv[1], crypt.mksalt(crypt.METHOD_BLOWFISH, rounds=4096)))" "$wizard_password")
             else
+                echo "Error: Python >= 3.13 does not support crypt module"
                 exit 1
             fi
+            sed -i "s|template_wizard_username|${wizard_username}|g" "${TRIM_PKGETC}/prometheus-web.yml"
+            sed -i "s|wizard_password_hashpw|${wizard_password_hashpw}|g" "${TRIM_PKGETC}/prometheus-web.yml"
+        else
+            echo "Warning: wizard_username is empty, skipping auth configuration"
+            echo '' > "${TRIM_PKGETC}/prometheus-web.yml"
+        fi
+    else
+        echo '' > "${TRIM_PKGETC}/prometheus-web.yml"
+    fi
+
+    processNum=`ps -fe | grep app/prometheus | grep -v grep | grep -v tail | wc -l`
+    if [[ ! $processNum -eq 0 ]]; then
+        echo "is already running"
+        exit 0
+    else
+        CPU_COUNT=$(nproc)
+        BIND_COUNT=4
+        [ "$CPU_COUNT" -lt "$BIND_COUNT" ] && BIND_COUNT="$CPU_COUNT"
+        START_CPU=$((CPU_COUNT - BIND_COUNT))
+        CPU_LIST=""
+        for i in $(seq 0 $((BIND_COUNT - 1))); do
+            CPU_LIST="${CPU_LIST}$((START_CPU + i)),"
+        done
+        CPU_LIST=${CPU_LIST%,}
+
+        echo "taskset -c ${CPU_LIST} ${EXEC_CMDLINE}"
+        nohup taskset -c ${CPU_LIST} ${EXEC_CMDLINE} >>${LOG_FILE} 2>&1 &
+        RETVAL=$?
+        if [ $RETVAL -eq 0 ]; then
+            exit 0
+        else
+            exit 1
+        fi
     fi
     ;;
 stop)
-	pkill -9 prometheus || echo "pkill fail $?"
+    pkill -9 prometheus || echo "pkill fail $?"
     ;;
 status)
     processNum=`ps -fe | grep app/prometheus | grep -v grep | grep -v tail | wc -l`
-    if [[ ! $processNum -eq 0 ]];then
-            echo "is already running"
-            exit 0
+    if [[ ! $processNum -eq 0 ]]; then
+        #echo "is already running"
+        exit 0
     else
         exit 3
     fi

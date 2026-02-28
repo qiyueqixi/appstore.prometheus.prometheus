@@ -25,11 +25,17 @@ scrape_configs:
     # metrics_path defaults to '/metrics'
     # scheme defaults to 'http'.
 
+    #basic_auth:
+    #  username: 'username'
+    #  password: 'password'
     static_configs:
       - targets: ["127.0.0.1:9090"]
        # The label name is added as a label `label_name=<label_value>` to any timeseries scraped from this config.
         labels:
           app: "prometheus"
   - job_name: "node"
+    #basic_auth:
+    #  username: 'username'
+    #  password: 'password'
     static_configs:
       - targets: ["127.0.0.1:9100"]

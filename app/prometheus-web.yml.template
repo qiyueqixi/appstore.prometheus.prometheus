@@ -1,0 +1,2 @@
+basic_auth_users:
+    template_wizard_username: wizard_password_hashpw
