@@ -2,7 +2,7 @@
 
 echo -e "$(date +'%Y/%m/%d %H:%M:%S')\t" $0 $*
 PACKAGE_BASE=${TRIM_APPDEST}
-PACKAGE_SHARE="/var/apps/prometheus.prometheus/shares/prometheus/prometheus/"
+PACKAGE_SHARE="/var/apps/prometheus.prometheus/shares/prometheus/prometheus"
 EXEC_BIN="${PACKAGE_BASE}/app/prometheus"
 EXEC_ARGS=" --config.file ${PACKAGE_SHARE}/prometheus.yml --web.config.file ${TRIM_PKGETC}/prometheus-web.yml --storage.tsdb.retention.time=180d --storage.tsdb.path ${PACKAGE_SHARE}/data"
 LOG_FILE="${PACKAGE_SHARE}/prometheus.log"
@@ -11,6 +11,9 @@ EXEC_CMDLINE="${EXEC_BIN} ${EXEC_ARGS}"
 
 case $1 in
 start)
+    chmod -R ug+rw "${PACKAGE_SHARE}"/* || echo "chmod fail $?"
+    chown -R prometheus "${PACKAGE_SHARE}"/* || echo "chown fail $?"
+
     if [ ! -f "${PACKAGE_SHARE}/prometheus.yml" ]; then
         cp "${PACKAGE_BASE}/app/prometheus.yml.template" "${PACKAGE_SHARE}/prometheus.yml"
     fi
