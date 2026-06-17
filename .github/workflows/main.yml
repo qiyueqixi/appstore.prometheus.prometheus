@@ -16,8 +16,8 @@ on:
         type: boolean
         default: false
 env:
-  target_version: "3.12.0-rc.0"
-  this_pack_version: "3.12.0-rc.0"
+  target_version: "3.12.0"
+  this_pack_version: "3.12.0-1"
 jobs:
   setup:
     runs-on: ubuntu-latest

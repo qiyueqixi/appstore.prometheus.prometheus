@@ -1,0 +1,12 @@
+[manifest]
+desc="Prometheus, a Cloud Native Computing Foundation project, is a systems and service monitoring system, and provides TSDB functionality.<br>The default listening port is 9090. Please configure your firewall, password, and other access restrictions properly to keep your data secure.<br>If you enable basic_auth_users, please modify the configuration yourself:<br>/var/apps/prometheus.prometheus/shares/prometheus/prometheus/prometheus.yml<br>For details, see the <a target="_blank" href="https://prometheus.io/">official documentation</a>."
+[install]
+basic_auth_users_title="Create basic_auth_users"
+basic_auth_users_help="Before installing the application, specify a username and password to generate basic_auth_users. <br>If you do not need this feature, you can leave it disabled."
+enable_basic_auth_users="Enable basic_auth_users"
+username_label="Username"
+username_required="Please enter a username"
+username_pattern="The username can contain only letters and numbers"
+password_label="Password"
+password_required="Please enter a password"
+password_pattern="The password can contain only letters and numbers"

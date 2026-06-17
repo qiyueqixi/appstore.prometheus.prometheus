@@ -1,0 +1,12 @@
+[manifest]
+desc="Prometheus者、Cloud Native Computing Foundation所屬計畫、系統及服務監視系統ニ候、且時系列資料庫（TSDB）機能ヲ提供仕候。<br>既定受信ポートハ9090ニ候。防火壁、暗號、其外接續制限策ヲ正シク設定シ、資料安全ヲ確保被下度候。<br>basic_auth_usersヲ有効ニ爲サルル場合ハ、左記設定ヲ自ラ修正被下度候。<br>/var/apps/prometheus.prometheus/shares/prometheus/prometheus/prometheus.yml<br>詳情ハ<a target="_blank" href="https://prometheus.io/">公式文書</a>ヲ參照被下度候。"
+[install]
+basic_auth_users_title="basic_auth_users作成"
+basic_auth_users_help="應用取附前、basic_auth_users生成ノ爲、使用者名及暗號ヲ指定被下度候。不要之場合、本機能ハ無効ノ儘ニテ可候。"
+enable_basic_auth_users="basic_auth_users有効化"
+username_label="使用者名"
+username_required="使用者名入力被下度候"
+username_pattern="使用者名ハ英字及數字ノミ使用可候"
+password_label="暗號"
+password_required="暗號入力被下度候"
+password_pattern="暗號ハ英字及數字ノミ使用可候"
