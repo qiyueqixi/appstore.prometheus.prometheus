@@ -1,0 +1,14 @@
+[manifest]
+desc="Prometheus の拡張アップグレード版は prometheus.prometheus のアプリ ID、元のアプリ名、9090 ポート、prometheus ユーザー、既存データディレクトリを維持します。設定と TSDB 履歴をそのまま再利用し、Go 製設定画面と Prometheus Web UI を追加します。<br>アップグレード前に設定と data ディレクトリをバックアップしてください。このパッケージは元のアプリを置き換えるため、同時にはインストールできません。"
+[install]
+upgrade_title="インプレースアップグレード"
+upgrade_help="このパッケージは元のアプリ ID とデータディレクトリを使用し、prometheus.yml、認証設定、TSDB 全体を保持します。<b>インストール前に設定と data ディレクトリをバックアップしてください。</b>移行スクリプトや WAL のコピーは不要です。管理画面は 9090、Prometheus 本体はローカル 9091 を使用します。"
+basic_auth_users_title="basic_auth_users作成"
+basic_auth_users_help="新規インストール時の認証情報を設定します。アップグレード時は既存の prometheus-web.yml を保持します。"
+enable_basic_auth_users="basic_auth_users有効化"
+username_label="使用者名"
+username_required="使用者名入力被下度候"
+username_pattern="使用者名ハ英字及數字ノミ使用可候"
+password_label="暗號"
+password_required="暗號入力被下度候"
+password_pattern="暗號ハ英字及數字ノミ使用可候"

@@ -1,10 +1,10 @@
 [
   {
-    "stepTitle": "数据迁移说明",
+    "stepTitle": "原版就地升级",
     "items": [
       {
         "type": "tips",
-        "helpText": "这是使用新应用 ID 的独立安装版本，数据目录与原版 Prometheus 完全分开。安装后如果检测到原版数据，管理页面会提示迁移方法。迁移前必须先停止原版 Prometheus；不要在原版运行时复制 WAL，也不要让两个 Prometheus 同时使用同一个 data 目录。"
+        "helpText": "此安装包使用原版应用 ID、运行用户和数据目录，将作为原版 Prometheus 的就地升级安装。升级前请备份 prometheus.yml、prometheus-web.yml 和整个 data 目录；本版本会直接复用原数据，不需要运行迁移脚本，也不要手动复制或合并 WAL。"
       }
     ]
   },

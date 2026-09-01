@@ -1,0 +1,27 @@
+[
+  {
+    "stepTitle": "卸载数据处理",
+    "items": [
+      {
+        "type": "tips",
+        "helpText": "此版本直接使用原版 Prometheus 数据目录。默认保留 /var/apps/prometheus.prometheus/shares/prometheus/prometheus/ 中的配置、历史监控数据、配置备份和运行日志，之后安装原版或再次安装升级版仍可继续使用。"
+      },
+      {
+        "type": "radio",
+        "field": "wizard_uninstall_data",
+        "label": "应用数据",
+        "initValue": "preserve",
+        "options": [
+          {
+            "label": "保留原版数据（推荐）",
+            "value": "preserve"
+          },
+          {
+            "label": "删除全部数据（不可恢复）",
+            "value": "delete"
+          }
+        ]
+      }
+    ]
+  }
+]

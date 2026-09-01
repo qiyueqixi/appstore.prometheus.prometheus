@@ -1,0 +1,14 @@
+{
+  ".url": {
+    "prometheus.prometheus": {
+      "title": "prometheus",
+      "desc": "原版就地升级，复用已有配置与历史数据",
+      "icon": "images/icon_{0}.png",
+      "type": "iframe",
+      "protocol": "http",
+      "port": "9090",
+      "url": "/",
+      "allUsers": true
+    }
+  }
+}

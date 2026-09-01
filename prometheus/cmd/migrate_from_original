@@ -1,0 +1,160 @@
+#!/bin/bash
+
+set -eu
+
+SOURCE_SHARE="/var/apps/prometheus.prometheus/shares/prometheus/prometheus"
+SOURCE_WEB_CONFIG="/var/apps/prometheus.prometheus/etc/prometheus-web.yml"
+TARGET_SHARE="/var/apps/prometheus.control/shares/prometheus-control"
+TARGET_WEB_CONFIG="/var/apps/prometheus.control/etc/prometheus-web.yml"
+TARGET_PROMTOOL="/var/apps/prometheus.control/target/app/promtool"
+TARGET_USER="prometheus-control"
+TARGET_GROUP="prometheus-control"
+
+fail() {
+    echo "迁移失败：$*" >&2
+    exit 1
+}
+
+prometheus_uses_path() {
+    local storage_path=$1
+    local cmdline command_line
+    for cmdline in /proc/[0-9]*/cmdline; do
+        [ -r "${cmdline}" ] || continue
+        command_line=$(tr '\0' ' ' <"${cmdline}" 2>/dev/null || true)
+        case "${command_line}" in
+        *prometheus*"${storage_path}"*) return 0 ;;
+        esac
+    done
+    return 1
+}
+
+move_contents() {
+    local source=$1
+    local destination=$2
+    local excluded=${3:-}
+    local item
+    for item in "${source}"/* "${source}"/.[!.]* "${source}"/..?*; do
+        [ -e "${item}" ] || [ -L "${item}" ] || continue
+        [ -n "${excluded}" ] && [ "${item}" = "${excluded}" ] && continue
+        mv "${item}" "${destination}/"
+    done
+}
+
+validate_numbered_files() {
+    local directory=$1
+    local label=$2
+    local minimum=${3:--1}
+    local item name number previous=""
+    [ -d "${directory}" ] || return 0
+
+    for item in "${directory}"/*; do
+        [ -f "${item}" ] || continue
+        name=${item##*/}
+        case "${name}" in
+        ""|*[!0-9]*) continue ;;
+        esac
+        number=$((10#${name}))
+        if [ "${number}" -le "${minimum}" ]; then
+            fail "${label} 编号 ${name} 不应小于或等于 checkpoint ${minimum}。请勿把两套数据直接合并。"
+        fi
+        if [ -n "${previous}" ] && [ "${number}" -ne $((previous + 1)) ]; then
+            fail "${label} 编号不连续：${previous} 后出现 ${name}。请勿把两套数据直接合并。"
+        fi
+        previous=${number}
+    done
+}
+
+validate_tsdb_sequences() {
+    local data_dir=$1
+    local wal_dir="${data_dir}/wal"
+    local checkpoint suffix number latest_checkpoint=-1
+
+    if [ -d "${wal_dir}" ]; then
+        for checkpoint in "${wal_dir}"/checkpoint.*; do
+            [ -d "${checkpoint}" ] || continue
+            suffix=${checkpoint##*.}
+            case "${suffix}" in
+            ""|*[!0-9]*) fail "发现无法识别的 checkpoint：${checkpoint##*/}" ;;
+            esac
+            number=$((10#${suffix}))
+            [ "${number}" -le "${latest_checkpoint}" ] || latest_checkpoint=${number}
+        done
+        validate_numbered_files "${wal_dir}" "WAL" "${latest_checkpoint}"
+    fi
+    validate_numbered_files "${data_dir}/chunks_head" "chunks_head" -1
+}
+
+[ "$(id -u)" -eq 0 ] || fail "请使用 sudo 执行此脚本。"
+[ -f "${SOURCE_SHARE}/prometheus.yml" ] || fail "未找到原版配置：${SOURCE_SHARE}/prometheus.yml"
+[ -d "${SOURCE_SHARE}/data" ] || fail "未找到原版数据目录：${SOURCE_SHARE}/data"
+[ -x "${TARGET_PROMTOOL}" ] || fail "未找到新应用的 promtool，请先完成 Prometheus Control 安装。"
+id "${TARGET_USER}" >/dev/null 2>&1 || fail "未找到用户 ${TARGET_USER}，请先完成 Prometheus Control 安装。"
+
+echo "迁移安全检查："
+echo "1. 不要使用 cp、rsync 或文件管理器把原版 data 直接覆盖到 Control。"
+echo "2. 脚本会先复制到暂存目录，并把 Control 已有文件移动到回滚目录。"
+echo "3. 看到“迁移完成”前不要启动任何一个 Prometheus。"
+
+if prometheus_uses_path "${SOURCE_SHARE}/data"; then
+    fail "原版 Prometheus 仍在运行，请先在应用中心停止它。"
+fi
+if prometheus_uses_path "${TARGET_SHARE}/data"; then
+    fail "Prometheus Control 仍在运行，请先在应用中心停止它。"
+fi
+
+mkdir -p "${TARGET_SHARE}"
+
+source_kb=$(du -skL "${SOURCE_SHARE}" | awk '{print $1}')
+free_kb=$(df -Pk "${TARGET_SHARE}" | awk 'NR == 2 {print $4}')
+required_kb=$((source_kb + source_kb / 20 + 102400))
+[ "${free_kb}" -ge "${required_kb}" ] || fail "目标存储空间不足，至少需要约 $((required_kb / 1024)) MiB 可用空间。"
+
+timestamp=$(date +%Y%m%d-%H%M%S)
+staging_dir="${TARGET_SHARE}.migration-staging-${timestamp}"
+rollback_dir="${TARGET_SHARE}/migration-rollback-${timestamp}"
+[ ! -e "${staging_dir}" ] || fail "暂存目录已存在：${staging_dir}"
+
+echo "正在复制原版配置和 TSDB，数据较大时请耐心等待……"
+mkdir -p "${staging_dir}"
+cp -a "${SOURCE_SHARE}/." "${staging_dir}/"
+
+if prometheus_uses_path "${SOURCE_SHARE}/data" || prometheus_uses_path "${TARGET_SHARE}/data"; then
+    fail "复制期间检测到 Prometheus 被启动。暂存副本保留在 ${staging_dir}，正式目录未切换。"
+fi
+
+echo "正在校验 WAL 和 head chunk 编号……"
+validate_tsdb_sequences "${staging_dir}/data"
+
+echo "正在校验导入的 prometheus.yml……"
+if ! (cd "${staging_dir}" && "${TARGET_PROMTOOL}" check config prometheus.yml); then
+    fail "原版配置未通过新版本 promtool 校验。暂存副本保留在 ${staging_dir}，原版数据未改动。"
+fi
+
+mkdir -p "${rollback_dir}"
+move_contents "${TARGET_SHARE}" "${rollback_dir}" "${rollback_dir}"
+move_contents "${staging_dir}" "${TARGET_SHARE}"
+rmdir "${staging_dir}"
+
+if [ -f "${SOURCE_WEB_CONFIG}" ]; then
+    if [ -f "${TARGET_WEB_CONFIG}" ]; then
+        cp -a "${TARGET_WEB_CONFIG}" "${rollback_dir}/prometheus-web.yml"
+    fi
+    cp -a "${SOURCE_WEB_CONFIG}" "${TARGET_WEB_CONFIG}"
+fi
+
+cat >"${TARGET_SHARE}/.migration-from-prometheus.prometheus" <<EOF
+source=${SOURCE_SHARE}
+completed_at=$(date -Iseconds)
+rollback=${rollback_dir}
+EOF
+
+chown -R "${TARGET_USER}:${TARGET_GROUP}" "${TARGET_SHARE}"
+[ ! -f "${TARGET_WEB_CONFIG}" ] || chown "${TARGET_USER}:${TARGET_GROUP}" "${TARGET_WEB_CONFIG}"
+
+echo "迁移完成。"
+echo "原版数据未被删除；Prometheus Control 的独立副本位于：${TARGET_SHARE}"
+echo "新应用初始文件已备份到：${rollback_dir}"
+if grep -F "127.0.0.1:9090" "${TARGET_SHARE}/prometheus.yml" >/dev/null 2>&1; then
+    echo "注意：配置中仍有 127.0.0.1:9090。启动后请在图形界面将 Prometheus 自身目标改为 127.0.0.1:19091。"
+fi
+echo "现在可以在应用中心启动 Prometheus Control；不要同时启动仍使用原数据目录的复制任务。"

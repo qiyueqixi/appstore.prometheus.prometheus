@@ -1,0 +1,27 @@
+[
+  {
+    "stepTitle": "卸载数据处理",
+    "items": [
+      {
+        "type": "tips",
+        "helpText": "请选择卸载后是否保留 Prometheus 配置、历史监控数据、配置备份和运行日志。默认保留 /var/apps/prometheus.control/shares/prometheus-control/ 中的数据，重新安装独立版后可以继续使用。"
+      },
+      {
+        "type": "radio",
+        "field": "wizard_uninstall_data",
+        "label": "应用数据",
+        "initValue": "preserve",
+        "options": [
+          {
+            "label": "保留数据（推荐）",
+            "value": "preserve"
+          },
+          {
+            "label": "删除全部数据（不可恢复）",
+            "value": "delete"
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -1,7 +1,7 @@
 {
   "defaults": {
-    "run-as": "prometheus"
+    "run-as": "package"
   },
-  "username": "prometheus",
-  "groupname": "prometheus"
+  "username": "prometheus-control",
+  "groupname": "prometheus-control"
 }

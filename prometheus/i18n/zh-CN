@@ -1,6 +1,8 @@
 [manifest]
-desc="Prometheus 是一个 CNCF 项目，一套系统和服务监控系统，并提供 TSDB 功能。<br>默认监听端口9090，请正确配置防火墙、密码及其他访问限制策略确保数据安全<br>若您开启了basic_auth_users请自行修改配置<br>/var/apps/prometheus.prometheus/shares/prometheus/prometheus/prometheus.yml<br>详情可参考<a target="_blank" href="https://prometheus.io/">官方文档</a><br>该软件包由社区用户提供，由社区用户自行维护"
+desc="Prometheus Control 是基于原版 Prometheus 构建的独立 fnOS 应用，在 19090 端口提供 Go 图形化配置门户并内嵌原版 Web。它使用独立应用 ID 和数据目录，可通过随包迁移脚本复制原版配置与历史 TSDB。保存配置前会自动校验、备份并热重载。<br>详情可参考<a target="_blank" href="https://prometheus.io/">Prometheus 官方文档</a><br>该软件包由社区用户提供并维护"
 [install]
+migration_title="从原版 Prometheus 迁移"
+migration_help="Prometheus Control 使用独立应用 ID、19090 端口和独立数据目录。迁移前必须在应用中心停止原版 Prometheus 和 Prometheus Control，然后通过 SSH 执行：<br>sudo /var/apps/prometheus.control/target/cmd/migrate_from_original<br><b>不要使用 cp、rsync 或文件管理器直接覆盖 Control 的 data 目录。</b>混合新旧 WAL 会导致 Prometheus 无法启动。脚本会暂存复制、校验 WAL 序列，并把 Control 原有文件放入回滚目录。看到“迁移完成”后再启动 Control。迁移会额外占用一份历史数据空间。"
 basic_auth_users_title="创建basic_auth_users"
 basic_auth_users_help="在安装应用前，你需要指定用户名及密码，以生成basic_auth_users，若不需要可以不启用该功能"
 enable_basic_auth_users="启用basic_auth_users"

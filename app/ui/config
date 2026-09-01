@@ -1,20 +1,14 @@
 {
     ".url": {
-        "prometheus.prometheus": {
-            "title": "prometheus",
-            "desc": "prometheus desc",
-            "icon": "images/ICON.PNG",
-            "type": "url",
+        "prometheus.control": {
+            "title": "Prometheus Control",
+            "desc": "图形化配置与 Prometheus 原版 Web",
+            "icon": "images/icon_{0}.png",
+            "type": "iframe",
             "protocol": "http",
-            "port": "9090",
-            "allUsers": true,
-			"control": {
-                "showRoute": 1,
-                "auth": 1, 
-                "port": 1,
-                "path": 1,
-                "fullUrl": 1
-            }
+            "port": "19090",
+            "url": "/",
+            "allUsers": true
         }
     }
 }

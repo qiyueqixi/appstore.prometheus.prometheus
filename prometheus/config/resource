@@ -2,13 +2,10 @@
   "data-share": {
       "shares": [
           {
-              "name": "prometheus"
+              "name": "prometheus-control"
           },
 		  {
-              "name": "prometheus/prometheus"
-          },
-		  {
-              "name": "prometheus/prometheus/data"
+              "name": "prometheus-control/data"
           }
       ]
   },

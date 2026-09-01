@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Prometheus Control</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Prometheus Control 首页">
+        <span class="brand-mark" aria-hidden="true"><span></span></span>
+        <span class="brand-copy">
+          <strong>Prometheus</strong>
+          <small>CONTROL PLANE</small>
+        </span>
+      </a>
+
+      <nav class="primary-nav" aria-label="主导航">
+        <button class="nav-button is-active" type="button" data-view-button="config">
+          <span class="nav-dot"></span>配置中心
+        </button>
+        <button class="nav-button" type="button" data-view-button="prometheus">
+          <span class="nav-dot"></span>原版 Web
+        </button>
+      </nav>
+
+      <div class="topbar-actions">
+        <div class="service-state" id="service-state" title="Prometheus 服务状态">
+          <span class="status-light"></span>
+          <span id="service-state-text">检查中</span>
+        </div>
+        <button class="icon-button" id="refresh-button" type="button" aria-label="重新读取配置" title="重新读取配置">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <aside class="migration-banner" id="migration-banner" hidden aria-labelledby="migration-banner-title">
+      <span class="migration-banner-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3 1.4 0 2.7-.1 3.8-.4"/><path d="m17 17 2 2 3-4"/></svg>
+      </span>
+      <div>
+        <strong id="migration-banner-title">发现原版 Prometheus 数据</strong>
+        <span>请勿直接覆盖 Control 的 data 目录；停机后使用随包迁移脚本完成复制。</span>
+      </div>
+      <button class="button button-quiet" id="migration-details-button" type="button">查看迁移步骤</button>
+    </aside>
+
+    <main>
+      <section class="view is-active" data-view="config">
+        <section class="summary-banner summary-card-dark" aria-label="配置概览">
+          <div class="summary-banner-lead">
+            <div>
+              <div class="summary-card-label">采集版图</div>
+              <div class="summary-number" id="target-count">—</div>
+              <div class="summary-number-label">用户设备</div>
+            </div>
+          </div>
+          <div class="summary-banner-divider" aria-hidden="true"></div>
+          <dl class="summary-list summary-banner-list">
+            <div><dt>采集任务</dt><dd id="job-count">—</dd></div>
+            <div><dt>采集间隔</dt><dd id="summary-interval">—</dd></div>
+            <div><dt>自动备份</dt><dd id="backup-count">—</dd></div>
+          </dl>
+          <div class="heading-actions">
+            <button class="button button-secondary settings-button" id="settings-button" type="button" aria-expanded="false" aria-controls="settings-modal">
+              <svg class="settings-button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7h-9M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
+              <span>设置</span>
+            </button>
+            <button class="button button-primary" id="save-button" type="button">
+              <span class="button-spark" aria-hidden="true"></span>
+              <span id="save-button-text">校验并应用</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="workspace-panel" aria-labelledby="workspace-title">
+          <header class="workspace-header">
+            <div>
+              <span class="section-index">CONFIG FILES</span>
+              <h2 id="workspace-title">配置文件</h2>
+              <p>选择一个配置文件，下方显示它包含的全部采集任务。</p>
+            </div>
+          </header>
+          <section class="config-file-section" aria-label="配置文件列表">
+            <div class="config-file-cards" id="config-file-tabs" role="tablist" aria-label="Prometheus 配置文件"></div>
+            <div class="config-file-create">
+              <button class="config-file-add-card" id="config-file-add" type="button" aria-expanded="false" aria-controls="config-file-popover" title="新建配置文件">
+                <span class="config-file-add-icon" aria-hidden="true">＋</span>
+                <strong>新建配置</strong>
+                <small>创建独立的 YAML 文件</small>
+              </button>
+              <div class="config-file-popover" id="config-file-popover" role="dialog" aria-label="新建配置文件" hidden>
+                <label for="config-file-name">配置名称</label>
+                <div>
+                  <input id="config-file-name" type="text" maxlength="80" autocomplete="off" placeholder="例如：机房采集">
+                  <button id="config-file-create-button" type="button">创建</button>
+                </div>
+                <small>新文件默认包含本机 Prometheus 和设备采集两个任务。</small>
+              </div>
+            </div>
+          </section>
+          <div class="jobs-section-heading">
+            <span class="section-index">SCRAPE JOBS</span>
+            <strong id="current-config-name">采集任务</strong>
+          </div>
+          <div class="jobs-list" id="jobs-list"></div>
+          <div class="empty-state" id="jobs-empty" hidden>
+            <div class="empty-orbit" aria-hidden="true"></div>
+            <h3>没有可编辑的采集任务</h3>
+            <p>可在设置中的原始 YAML 里添加 scrape_configs。</p>
+          </div>
+        </section>
+
+        <div class="profile-modal" id="profile-rename-modal" hidden aria-hidden="true">
+          <div class="profile-modal-backdrop" data-profile-rename-close></div>
+          <section class="profile-dialog" role="dialog" aria-modal="true" aria-labelledby="profile-rename-title">
+            <header class="profile-dialog-header">
+              <div>
+                <span class="section-index">CONFIG FILE</span>
+                <h2 id="profile-rename-title">编辑配置名称</h2>
+              </div>
+              <button class="icon-button profile-dialog-close" type="button" data-profile-rename-close aria-label="关闭" title="关闭">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+              </button>
+            </header>
+            <div class="profile-dialog-body">
+              <label class="field" for="profile-rename-input">
+                <span>显示名称</span>
+                <input id="profile-rename-input" type="text" maxlength="80" autocomplete="off">
+                <small>只修改页面显示名称，实际 YAML 文件名保持不变。</small>
+              </label>
+            </div>
+            <footer class="profile-dialog-footer">
+              <button class="button button-secondary" type="button" data-profile-rename-close>取消</button>
+              <button class="button button-primary" id="profile-rename-save" type="button">保存名称</button>
+            </footer>
+          </section>
+        </div>
+
+        <div class="profile-modal" id="profile-delete-modal" hidden aria-hidden="true">
+          <div class="profile-modal-backdrop" data-profile-delete-close></div>
+          <section class="profile-dialog profile-delete-dialog" role="alertdialog" aria-modal="true" aria-labelledby="profile-delete-title" aria-describedby="profile-delete-description">
+            <header class="profile-dialog-header">
+              <div>
+                <span class="section-index">DELETE CONFIG</span>
+                <h2 id="profile-delete-title">确认删除配置</h2>
+              </div>
+              <button class="icon-button profile-dialog-close" type="button" data-profile-delete-close aria-label="关闭" title="关闭">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+              </button>
+            </header>
+            <div class="profile-dialog-body">
+              <div class="profile-delete-warning">
+                <strong id="profile-delete-name">配置名称</strong>
+                <code id="profile-delete-file">config.yml</code>
+                <p id="profile-delete-description">删除后无法恢复，此配置文件中的采集任务也会一并删除。</p>
+              </div>
+            </div>
+            <footer class="profile-dialog-footer">
+              <button class="button button-secondary" type="button" data-profile-delete-close>取消</button>
+              <button class="button button-danger" id="profile-delete-confirm" type="button">确认删除</button>
+            </footer>
+          </section>
+        </div>
+
+        <div class="settings-modal" id="settings-modal" hidden aria-hidden="true">
+          <div class="settings-backdrop" data-settings-close></div>
+          <section class="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+            <header class="settings-dialog-header">
+              <div>
+                <span class="section-index">CONFIGURATION</span>
+                <h2 id="settings-title">设置</h2>
+                <p>全局节奏、采集组参数、备份和高级 YAML 都在这里管理。</p>
+              </div>
+              <button class="icon-button settings-close-button" type="button" data-settings-close aria-label="关闭设置" title="关闭设置">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+              </button>
+            </header>
+
+            <div class="editor-tabs" role="tablist" aria-label="配置编辑方式">
+              <button class="editor-tab is-active" type="button" role="tab" aria-selected="true" data-editor-tab="visual">常用设置</button>
+              <button class="editor-tab" type="button" role="tab" aria-selected="false" data-editor-tab="raw">原始 YAML</button>
+              <div class="editor-meta" id="modified-time">尚未读取</div>
+            </div>
+
+            <div class="settings-dialog-body">
+              <div class="editor-body is-active" data-editor-body="visual">
+                <section class="form-section global-section">
+                  <div class="section-heading">
+                    <div>
+                      <span class="section-index">GLOBAL</span>
+                      <h2>全局节奏</h2>
+                    </div>
+                    <p>未单独设置时使用这里的时间参数。</p>
+                  </div>
+                  <div class="field-grid field-grid-three">
+                    <label class="field">
+                      <span>默认采集间隔</span>
+                      <input id="global-scrape-interval" type="text" autocomplete="off" placeholder="15s">
+                      <small>例如 15s、1m</small>
+                    </label>
+                    <label class="field">
+                      <span>规则评估间隔</span>
+                      <input id="global-evaluation-interval" type="text" autocomplete="off" placeholder="15s">
+                      <small>告警与记录规则频率</small>
+                    </label>
+                    <label class="field">
+                      <span>默认超时时间</span>
+                      <input id="global-scrape-timeout" type="text" autocomplete="off" placeholder="10s">
+                      <small>留空使用 Prometheus 默认值</small>
+                    </label>
+                  </div>
+                </section>
+
+                <section class="form-section job-settings-section">
+                  <div class="section-heading">
+                    <div>
+                      <span class="section-index">JOB SETTINGS</span>
+                      <h2>采集任务参数</h2>
+                    </div>
+                    <p>设备地址和别名在主页面直接编辑。</p>
+                  </div>
+                  <div class="job-settings-list" id="job-settings-list"></div>
+                </section>
+
+                <section class="form-section backup-card" aria-labelledby="backup-title">
+                  <div class="section-heading">
+                    <div>
+                      <span class="section-index">BACKUPS</span>
+                      <h2 id="backup-title">备份管理</h2>
+                    </div>
+                    <p>应用配置前自动保留副本，支持设置保留数量和删除记录。</p>
+                  </div>
+                  <div class="backup-directory">
+                    <span>备份位置</span>
+                    <code id="backup-directory">读取中</code>
+                  </div>
+                  <div class="backup-controls">
+                    <label class="toggle-field">
+                      <input id="backup-enabled" type="checkbox" checked>
+                      <span>启用应用前备份</span>
+                    </label>
+                    <label class="field compact-field">
+                      <span>最多保留份数</span>
+                      <input id="backup-retention" type="number" min="1" max="100" step="1" inputmode="numeric" autocomplete="off">
+                    </label>
+                    <button class="button button-secondary backup-save-button" id="save-backup-settings" type="button">保存备份设置</button>
+                  </div>
+                  <div class="backup-history-heading">
+                    <span>备份记录</span>
+                    <strong id="backup-record-count">0 份</strong>
+                  </div>
+                  <div class="backup-list" id="backup-list" aria-label="备份记录"></div>
+                  <div class="backup-empty" id="backup-empty" hidden>暂无备份记录</div>
+                </section>
+              </div>
+
+              <div class="editor-body raw-editor" data-editor-body="raw">
+                <div class="raw-toolbar">
+                  <div>
+                    <span class="section-index">ADVANCED</span>
+                    <h2>完整配置文件</h2>
+                  </div>
+                  <span>支持全部 Prometheus 配置语法</span>
+                </div>
+                <label class="sr-only" for="raw-yaml">Prometheus YAML 配置</label>
+                <textarea id="raw-yaml" spellcheck="false" autocomplete="off"></textarea>
+                <p class="raw-hint">保存时会执行语法和语义校验。错误配置不会覆盖当前文件。</p>
+              </div>
+            </div>
+
+            <footer class="settings-dialog-footer">
+              <span>修改不会自动写入，点击应用后才会生效。</span>
+              <div>
+                <button class="button button-primary" id="modal-save-button" type="button">
+                  <span class="button-spark" aria-hidden="true"></span>
+                  <span id="modal-save-button-text">校验并应用</span>
+                </button>
+              </div>
+            </footer>
+          </section>
+        </div>
+      </section>
+
+      <section class="view prometheus-view" data-view="prometheus">
+        <div class="web-toolbar">
+          <div>
+            <p class="eyebrow">UPSTREAM INTERFACE</p>
+            <h1>Prometheus 原版 Web</h1>
+          </div>
+          <div class="web-actions">
+            <button class="button button-secondary" id="reload-frame-button" type="button">刷新页面</button>
+            <a class="button button-primary" href="/prometheus/" target="_blank" rel="noopener">新窗口打开 ↗</a>
+          </div>
+        </div>
+        <div class="web-frame-shell">
+          <div class="frame-loading" id="frame-loading">
+            <span></span>正在载入 Prometheus…
+          </div>
+          <iframe id="prometheus-frame" title="Prometheus 原版 Web" data-src="/prometheus/"></iframe>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="profile-modal" id="migration-modal" hidden aria-hidden="true">
+    <div class="profile-modal-backdrop" data-migration-close></div>
+    <section class="profile-dialog migration-dialog" role="dialog" aria-modal="true" aria-labelledby="migration-title">
+      <header class="profile-dialog-header">
+        <div>
+          <span class="section-index">DATA MIGRATION</span>
+          <h2 id="migration-title">迁移原版 Prometheus 数据</h2>
+        </div>
+        <button class="icon-button profile-dialog-close" type="button" data-migration-close aria-label="关闭" title="关闭">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+        </button>
+      </header>
+      <div class="profile-dialog-body migration-dialog-body">
+        <p class="migration-intro">Control 不会自动移动或删除原版文件。必须使用随包脚本迁移，不能用 <code>cp</code>、<code>rsync</code> 或文件管理器把原版文件直接合并到现有 <code>data/</code>。</p>
+        <dl class="migration-paths">
+          <div><dt>原版数据</dt><dd><code id="migration-source-path"></code></dd></div>
+          <div><dt>Control 数据</dt><dd><code id="migration-target-path"></code></dd></div>
+        </dl>
+        <ol class="migration-steps">
+          <li><strong>停止两个应用</strong><span>在应用中心停止原版 Prometheus 和 Prometheus Control，避免复制正在写入的 WAL。</span></li>
+          <li><strong>只运行迁移脚本</strong><span>脚本先复制到暂存目录，并把 Control 已有的初始化数据移入回滚目录，不会直接混合两套数据。</span></li>
+          <li><strong>等待“迁移完成”</strong><span>脚本会检查磁盘空间、配置、WAL 与 head chunk 序列；出现错误时不要启动 Control。</span></li>
+          <li><strong>仅启动 Control 验证</strong><span>确认历史查询和采集正常后，再决定是否重新启动或卸载原版应用。</span></li>
+        </ol>
+        <div class="migration-warning">
+          <strong>禁止直接覆盖 data 目录</strong>
+          <span>把原版高编号 WAL 与 Control 初始化的低编号 WAL 混在一起，会导致 <code>segments are not sequential</code> 并使 Prometheus 无法启动。</span>
+        </div>
+        <div class="migration-command-row">
+          <code id="migration-command"></code>
+          <button class="icon-button migration-copy-button" id="migration-copy-button" type="button" aria-label="复制迁移命令" title="复制迁移命令">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="1"/><path d="M15 9V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h4"/></svg>
+          </button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
+  <script src="/app.js" defer></script>
+</body>
+</html>

@@ -1,2 +1,70 @@
 #!/bin/bash
-echo -e "$(date +'%Y/%m/%d %H:%M:%S')\t" $0 $*
+
+echo -e "$(date +'%Y/%m/%d %H:%M:%S')\t" "$0" "$@"
+
+write_error() {
+    local message=$1
+    echo "$message" >&2
+    if [ -n "${TRIM_TEMP_LOGFILE:-}" ]; then
+        printf '%s\n' "$message" > "$TRIM_TEMP_LOGFILE"
+    fi
+}
+
+if [ "${wizard_uninstall_data:-preserve}" = "preserve" ]; then
+    echo "Preserving Prometheus application data."
+    exit 0
+fi
+
+if [ "${wizard_uninstall_data:-}" != "delete" ]; then
+    write_error "无法识别卸载数据选项，已取消删除并保留全部数据。"
+    exit 1
+fi
+
+PACKAGE_ENV="${TRIM_APPDEST:-}/app/package.env"
+if [ -z "${TRIM_APPDEST:-}" ] || [ ! -f "$PACKAGE_ENV" ]; then
+    write_error "无法读取应用运行配置，已取消删除并保留全部数据。"
+    exit 1
+fi
+
+. "$PACKAGE_ENV"
+
+case "${TRIM_APPNAME:-}" in
+prometheus.control)
+    expected_share="/var/apps/prometheus.control/shares/prometheus-control"
+    expected_real_pattern='^/vol[0-9]+/@appshare/prometheus-control$'
+    ;;
+prometheus.prometheus)
+    expected_share="/var/apps/prometheus.prometheus/shares/prometheus/prometheus"
+    expected_real_pattern='^/vol[0-9]+/@appshare/prometheus/prometheus$'
+    ;;
+*)
+    write_error "应用 ID 校验失败，已取消删除并保留全部数据。"
+    exit 1
+    ;;
+esac
+
+delete_target=${PACKAGE_SHARE%/}
+if [ "$delete_target" != "$expected_share" ]; then
+    write_error "应用数据目录校验失败，已取消删除并保留全部数据：$delete_target"
+    exit 1
+fi
+
+if [ ! -e "$delete_target" ]; then
+    echo "Prometheus application data is already absent: $delete_target"
+    exit 0
+fi
+
+resolved_target=$(readlink -f -- "$delete_target" 2>/dev/null || true)
+if [ -z "$resolved_target" ] || ! [[ "$resolved_target" =~ $expected_real_pattern ]]; then
+    write_error "应用数据实际路径校验失败，已取消删除并保留全部数据：${resolved_target:-无法解析}"
+    exit 1
+fi
+
+echo "Deleting Prometheus application data: $resolved_target"
+rm -rf -- "$resolved_target"
+if [ -e "$resolved_target" ]; then
+    write_error "应用数据删除失败：$resolved_target"
+    exit 1
+fi
+
+echo "Prometheus application data deleted."

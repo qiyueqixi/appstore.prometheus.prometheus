@@ -1,6 +1,8 @@
 [manifest]
-desc="Prometheus者、Cloud Native Computing Foundation所屬計畫、系統及服務監視系統ニ候、且時系列資料庫（TSDB）機能ヲ提供仕候。<br>既定受信ポートハ9090ニ候。防火壁、暗號、其外接續制限策ヲ正シク設定シ、資料安全ヲ確保被下度候。<br>basic_auth_usersヲ有効ニ爲サルル場合ハ、左記設定ヲ自ラ修正被下度候。<br>/var/apps/prometheus.prometheus/shares/prometheus/prometheus/prometheus.yml<br>詳情ハ<a target="_blank" href="https://prometheus.io/">公式文書</a>ヲ參照被下度候。"
+desc="Prometheus Control は、公式 Prometheus を基盤とする独立した fnOS アプリです。19090 ポートで Go 製のグラフィカル設定画面を提供し、公式 Web UI も内蔵します。独立したアプリ ID とデータディレクトリを使用し、元のパッケージから設定と TSDB 履歴をコピーする移行スクリプトを同梱しています。<br>詳細は <a target="_blank" href="https://prometheus.io/">Prometheus 公式ドキュメント</a>を参照してください。"
 [install]
+migration_title="元の Prometheus から移行"
+migration_help="Prometheus Control は独立したアプリ ID、19090 ポート、データディレクトリを使用します。App Center で両方の Prometheus を停止してから、SSH で次を実行してください：<br>sudo /var/apps/prometheus.control/target/cmd/migrate_from_original<br><b>cp、rsync、ファイルマネージャーで Control の data ディレクトリへ直接上書きしないでください。</b>新旧 WAL が混在すると Prometheus は起動できません。スクリプトは一時領域へコピーし、WAL 番号を検証して既存ファイルをロールバックディレクトリへ移動します。「移行完了」と表示された後に Control を起動してください。"
 basic_auth_users_title="basic_auth_users作成"
 basic_auth_users_help="應用取附前、basic_auth_users生成ノ爲、使用者名及暗號ヲ指定被下度候。不要之場合、本機能ハ無効ノ儘ニテ可候。"
 enable_basic_auth_users="basic_auth_users有効化"

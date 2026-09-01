@@ -1,0 +1,14 @@
+[manifest]
+desc="Prometheus 原版增强升级包沿用 prometheus.prometheus 应用 ID、应用名称、9090 端口、prometheus 用户和原版数据目录，升级时直接复用已有配置与历史 TSDB，不需要复制数据。升级后增加 Go 图形化配置门户并内嵌原版 Web。<br>安装前建议备份配置与 data 目录；该包不能与原版 Prometheus 同时安装，因为它就是原版应用的就地升级。<br>详情可参考<a target="_blank" href="https://prometheus.io/">Prometheus 官方文档</a>"
+[install]
+upgrade_title="原版就地升级"
+upgrade_help="此包使用与原版相同的应用 ID 和数据目录，会直接升级原版并保留 prometheus.yml、认证配置和完整 TSDB。<b>安装前建议先备份原版配置与 data 目录。</b>无需运行迁移脚本，也不要另行复制 WAL。升级完成后管理页面仍使用 9090 端口，Prometheus 本体改为仅监听本机 9091。"
+basic_auth_users_title="创建basic_auth_users"
+basic_auth_users_help="全新安装时可指定用户名及密码。升级已有应用时会保留现有 prometheus-web.yml。"
+enable_basic_auth_users="启用basic_auth_users"
+username_label="用户名"
+username_required="请输入用户名"
+username_pattern="用户名只能包含字母和数字"
+password_label="密码"
+password_required="请输入密码"
+password_pattern="密码只能包含字母和数字"

@@ -1,0 +1,14 @@
+[manifest]
+desc="This enhanced Prometheus upgrade keeps the prometheus.prometheus application ID, original application name, port 9090, prometheus user, and original data directory. It reuses the existing configuration and historical TSDB in place while adding the Go configuration portal and embedded upstream Web UI.<br>Back up the configuration and data directory before upgrading. This package replaces the original application and cannot be installed alongside it.<br>See the <a target="_blank" href="https://prometheus.io/">Prometheus documentation</a> for upstream details."
+[install]
+upgrade_title="In-place upgrade"
+upgrade_help="This package uses the original application ID and data directory. It upgrades the original package in place and preserves prometheus.yml, authentication settings, and the complete TSDB. <b>Back up the original configuration and data directory before installation.</b> No migration script or WAL copy is required. The portal remains on port 9090 and the Prometheus process listens locally on port 9091."
+basic_auth_users_title="Create basic_auth_users"
+basic_auth_users_help="Set credentials for a fresh installation. Existing prometheus-web.yml settings are preserved during an upgrade."
+enable_basic_auth_users="Enable basic_auth_users"
+username_label="Username"
+username_required="Please enter a username"
+username_pattern="The username can contain only letters and numbers"
+password_label="Password"
+password_required="Please enter a password"
+password_pattern="The password can contain only letters and numbers"

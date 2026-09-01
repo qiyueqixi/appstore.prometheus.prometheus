@@ -1,81 +1,183 @@
 #!/bin/bash
 
-echo -e "$(date +'%Y/%m/%d %H:%M:%S')\t" $0 $*
-PACKAGE_BASE=${TRIM_APPDEST}
-PACKAGE_SHARE="/var/apps/prometheus.prometheus/shares/prometheus/prometheus"
-EXEC_BIN="${PACKAGE_BASE}/app/prometheus"
-EXEC_ARGS=" --config.file ${PACKAGE_SHARE}/prometheus.yml --web.config.file ${TRIM_PKGETC}/prometheus-web.yml --storage.tsdb.retention.time=180d --storage.tsdb.path ${PACKAGE_SHARE}/data"
-LOG_FILE="${PACKAGE_SHARE}/prometheus.log"
+echo -e "$(date +'%Y/%m/%d %H:%M:%S')\t" "$0" "$@"
 
-EXEC_CMDLINE="${EXEC_BIN} ${EXEC_ARGS}"
+PACKAGE_BASE=${TRIM_APPDEST}
+PACKAGE_ENV="${PACKAGE_BASE}/app/package.env"
+[ -f "${PACKAGE_ENV}" ] || {
+    echo "missing package runtime configuration: ${PACKAGE_ENV}"
+    exit 1
+}
+. "${PACKAGE_ENV}"
+
+: "${APP_RUN_USER:?missing APP_RUN_USER}"
+: "${APP_RUN_GROUP:?missing APP_RUN_GROUP}"
+: "${PACKAGE_SHARE:?missing PACKAGE_SHARE}"
+: "${MANAGER_PORT:?missing MANAGER_PORT}"
+: "${PROMETHEUS_PORT:?missing PROMETHEUS_PORT}"
+
+PROMETHEUS_BIN="${PACKAGE_BASE}/app/prometheus"
+PROMTOOL_BIN="${PACKAGE_BASE}/app/promtool"
+MANAGER_BIN="${PACKAGE_BASE}/app/prometheus-manager"
+CONFIG_FILE="${PACKAGE_SHARE}/prometheus.yml"
+WEB_CONFIG_FILE="${TRIM_PKGETC}/prometheus-web.yml"
+PROMETHEUS_LOG="${PACKAGE_SHARE}/prometheus.log"
+MANAGER_LOG="${PACKAGE_SHARE}/prometheus-manager.log"
+PROMETHEUS_PID_FILE="${TRIM_PKGETC}/prometheus.pid"
+MANAGER_PID_FILE="${TRIM_PKGETC}/prometheus-manager.pid"
+
+is_running() {
+    local pid_file=$1
+    [ -f "${pid_file}" ] || return 1
+    local pid
+    pid=$(cat "${pid_file}" 2>/dev/null) || return 1
+    [ -n "${pid}" ] && kill -0 "${pid}" 2>/dev/null
+}
+
+find_process() {
+    local executable=$1
+    ps -eo pid=,args= | awk -v executable="${executable}" '$2 == executable { print $1; exit }'
+}
+
+terminate_pid() {
+    local pid=$1
+    [ -n "${pid}" ] || return 0
+    if kill -0 "${pid}" 2>/dev/null; then
+        kill "${pid}" 2>/dev/null || true
+        for _ in $(seq 1 20); do
+            kill -0 "${pid}" 2>/dev/null || break
+            sleep 0.25
+        done
+        kill -9 "${pid}" 2>/dev/null || true
+    fi
+}
+
+stop_untracked_process() {
+    local pid_file=$1
+    local executable=$2
+    if is_running "${pid_file}"; then
+        return 0
+    fi
+    rm -f "${pid_file}"
+    local pid
+    pid=$(find_process "${executable}")
+    if [ -n "${pid}" ]; then
+        echo "stopping untracked process ${pid}: ${executable}"
+        terminate_pid "${pid}"
+    fi
+}
+
+stop_process() {
+    local pid_file=$1
+    local executable=$2
+    local pid
+    pid=$(cat "${pid_file}" 2>/dev/null || true)
+    if [ -z "${pid}" ] || ! kill -0 "${pid}" 2>/dev/null; then
+        pid=$(find_process "${executable}")
+    fi
+    terminate_pid "${pid}"
+    rm -f "${pid_file}"
+}
+
+initialize_files() {
+    mkdir -p "${PACKAGE_SHARE}/data" "${TRIM_PKGETC}"
+    if [ ! -f "${CONFIG_FILE}" ]; then
+        cp "${PACKAGE_BASE}/app/prometheus.yml.template" "${CONFIG_FILE}"
+    fi
+    if [ ! -f "${WEB_CONFIG_FILE}" ]; then
+        if [ "${wizard_enable_basic_auth_users}" = "true" ] && [ -n "${wizard_username}" ] && [ -n "${wizard_password}" ]; then
+            cp "${PACKAGE_BASE}/app/prometheus-web.yml.template" "${WEB_CONFIG_FILE}"
+            wizard_password_hashpw=$(printf '%s' "${wizard_password}" | "${MANAGER_BIN}" hash-password)
+            sed -i "s|template_wizard_username|${wizard_username}|g" "${WEB_CONFIG_FILE}"
+            sed -i "s|wizard_password_hashpw|${wizard_password_hashpw}|g" "${WEB_CONFIG_FILE}"
+        else
+            : > "${WEB_CONFIG_FILE}"
+        fi
+    fi
+    if [ "${NORMALIZE_SHARE_OWNERSHIP}" = "true" ]; then
+        chmod -R ug+rwX "${PACKAGE_SHARE}" || echo "chmod fail $?"
+        chown -R "${APP_RUN_USER}:${APP_RUN_GROUP}" "${PACKAGE_SHARE}" || echo "chown fail $?"
+    else
+        chmod ug+rwX "${PACKAGE_SHARE}" "${PACKAGE_SHARE}/data" "${CONFIG_FILE}" || echo "chmod fail $?"
+        chown "${APP_RUN_USER}:${APP_RUN_GROUP}" "${PACKAGE_SHARE}" "${PACKAGE_SHARE}/data" "${CONFIG_FILE}" || echo "chown fail $?"
+    fi
+}
+
+start_prometheus() {
+    if is_running "${PROMETHEUS_PID_FILE}"; then
+        return 0
+    fi
+
+    local cpu_count bind_count start_cpu cpu_list
+    cpu_count=$(nproc)
+    bind_count=4
+    [ "${cpu_count}" -lt "${bind_count}" ] && bind_count=${cpu_count}
+    start_cpu=$((cpu_count - bind_count))
+    cpu_list=""
+    for i in $(seq 0 $((bind_count - 1))); do
+        cpu_list="${cpu_list}$((start_cpu + i)),"
+    done
+    cpu_list=${cpu_list%,}
+
+    local args=(
+        "--config.file=${CONFIG_FILE}"
+        "--web.listen-address=127.0.0.1:${PROMETHEUS_PORT}"
+        "--web.external-url=/prometheus/"
+        "--web.route-prefix=/"
+        "--web.enable-lifecycle"
+        "--storage.tsdb.retention.time=180d"
+        "--storage.tsdb.path=${PACKAGE_SHARE}/data"
+    )
+    echo "taskset -c ${cpu_list} ${PROMETHEUS_BIN} ${args[*]}"
+    (
+        cd "${PACKAGE_SHARE}"
+        nohup taskset -c "${cpu_list}" "${PROMETHEUS_BIN}" "${args[@]}" >>"${PROMETHEUS_LOG}" 2>&1 &
+        echo $! > "${PROMETHEUS_PID_FILE}"
+    )
+}
+
+start_manager() {
+    if is_running "${MANAGER_PID_FILE}"; then
+        return 0
+    fi
+    nohup env \
+        LISTEN_ADDR=":${MANAGER_PORT}" \
+        PROMETHEUS_CONFIG="${CONFIG_FILE}" \
+        PROMETHEUS_WEB_CONFIG="${WEB_CONFIG_FILE}" \
+        PROMETHEUS_TARGET="http://127.0.0.1:${PROMETHEUS_PORT}" \
+        PROMETHEUS_RELOAD_URL="http://127.0.0.1:${PROMETHEUS_PORT}/-/reload" \
+        PROMETHEUS_READY_URL="http://127.0.0.1:${PROMETHEUS_PORT}/-/ready" \
+        PROMETHEUS_SHARE="${PACKAGE_SHARE}" \
+        PROMETHEUS_MIGRATION_ENABLED="${MIGRATION_ENABLED}" \
+        ORIGINAL_PROMETHEUS_SHARE="${ORIGINAL_PROMETHEUS_SHARE}" \
+        PROMETHEUS_MIGRATION_COMMAND="${MIGRATION_COMMAND}" \
+        PROMTOOL_BIN="${PROMTOOL_BIN}" \
+        "${MANAGER_BIN}" >>"${MANAGER_LOG}" 2>&1 &
+    echo $! > "${MANAGER_PID_FILE}"
+}
 
 case $1 in
 start)
-    chmod -R ug+rw "${PACKAGE_SHARE}"/* || echo "chmod fail $?"
-    chown -R prometheus "${PACKAGE_SHARE}"/* || echo "chown fail $?"
-
-    if [ ! -f "${PACKAGE_SHARE}/prometheus.yml" ]; then
-        cp "${PACKAGE_BASE}/app/prometheus.yml.template" "${PACKAGE_SHARE}/prometheus.yml"
-    fi
-    echo "is wizard_enable_basic_auth_users ${wizard_enable_basic_auth_users}"
-    if [ "${wizard_enable_basic_auth_users}" = "true" ]; then
-        cp -f "${PACKAGE_BASE}/app/prometheus-web.yml.template" "${TRIM_PKGETC}/prometheus-web.yml"
-        if [ -n "${wizard_username}" ]; then
-            #'crypt' is deprecated and slated for removal in Python 3.13
-            python_major=$(python3 --version 2>&1 | awk '{print $2}' | cut -d. -f1)
-            python_minor=$(python3 --version 2>&1 | awk '{print $2}' | cut -d. -f2)
-            if [ "$python_major" -eq 3 ] && [ "$python_minor" -lt 13 ]; then
-                wizard_password_hashpw=$(python3 -c "import crypt,sys; print(crypt.crypt(sys.argv[1], crypt.mksalt(crypt.METHOD_BLOWFISH, rounds=4096)))" "$wizard_password")
-            else
-                echo "Error: Python >= 3.13 does not support crypt module"
-                exit 1
-            fi
-            sed -i "s|template_wizard_username|${wizard_username}|g" "${TRIM_PKGETC}/prometheus-web.yml"
-            sed -i "s|wizard_password_hashpw|${wizard_password_hashpw}|g" "${TRIM_PKGETC}/prometheus-web.yml"
-        else
-            echo "Warning: wizard_username is empty, skipping auth configuration"
-            echo '' > "${TRIM_PKGETC}/prometheus-web.yml"
-        fi
-    else
-        echo '' > "${TRIM_PKGETC}/prometheus-web.yml"
-    fi
-
-    processNum=`ps -fe | grep app/prometheus | grep -v grep | grep -v tail | wc -l`
-    if [[ ! $processNum -eq 0 ]]; then
-        echo "is already running"
+    stop_untracked_process "${PROMETHEUS_PID_FILE}" "${PROMETHEUS_BIN}"
+    stop_untracked_process "${MANAGER_PID_FILE}" "${MANAGER_BIN}"
+    initialize_files
+    start_prometheus
+    start_manager
+    sleep 1
+    if is_running "${PROMETHEUS_PID_FILE}" && is_running "${MANAGER_PID_FILE}"; then
         exit 0
-    else
-        CPU_COUNT=$(nproc)
-        BIND_COUNT=4
-        [ "$CPU_COUNT" -lt "$BIND_COUNT" ] && BIND_COUNT="$CPU_COUNT"
-        START_CPU=$((CPU_COUNT - BIND_COUNT))
-        CPU_LIST=""
-        for i in $(seq 0 $((BIND_COUNT - 1))); do
-            CPU_LIST="${CPU_LIST}$((START_CPU + i)),"
-        done
-        CPU_LIST=${CPU_LIST%,}
-
-        echo "taskset -c ${CPU_LIST} ${EXEC_CMDLINE}"
-        nohup taskset -c ${CPU_LIST} ${EXEC_CMDLINE} >>${LOG_FILE} 2>&1 &
-        RETVAL=$?
-        if [ $RETVAL -eq 0 ]; then
-            exit 0
-        else
-            exit 1
-        fi
     fi
+    exit 1
     ;;
 stop)
-    pkill -9 prometheus || echo "pkill fail $?"
+    stop_process "${MANAGER_PID_FILE}" "${MANAGER_BIN}"
+    stop_process "${PROMETHEUS_PID_FILE}" "${PROMETHEUS_BIN}"
     ;;
 status)
-    processNum=`ps -fe | grep app/prometheus | grep -v grep | grep -v tail | wc -l`
-    if [[ ! $processNum -eq 0 ]]; then
-        #echo "is already running"
+    if is_running "${PROMETHEUS_PID_FILE}" && is_running "${MANAGER_PID_FILE}"; then
         exit 0
-    else
-        exit 3
     fi
+    exit 3
     ;;
 *)
     exit 1
