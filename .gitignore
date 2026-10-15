@@ -2,3 +2,6 @@
 /tmp/
 /.tmp/
 /dist/
+/app/.prometheus-config-profiles.json
+/app/configs/
+/manager/.tmp/
